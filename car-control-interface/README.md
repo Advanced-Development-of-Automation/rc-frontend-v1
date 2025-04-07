@@ -68,3 +68,156 @@ This section has moved here: [https://facebook.github.io/create-react-app/docs/d
 ### `npm run build` fails to minify
 
 This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+
+# Система удаленного управления автомобилем
+
+## Обзор проекта
+
+Это веб-приложение для удаленного управления автомобилем с использованием WebSocket для передачи команд и получения данных телеметрии в реальном времени. Приложение включает в себя систему камер, панель управления и мониторинг состояния автомобиля.
+
+## Настройка WebSocket
+
+Проект использует WebSocket для обмена данными с сервером управления автомобилем. Настройка осуществляется через переменные окружения в файле `.env`:
+
+```
+REACT_APP_WS_URL=wss://81.200.149.133:9000
+```
+
+### Формат сообщений
+
+WebSocket API поддерживает следующие форматы сообщений:
+
+1. **Отправка команд**:
+   ```json
+   {
+     "type": "command",
+     "message": "ваша_команда_здесь"
+   }
+   ```
+
+2. **Подключение к порту**:
+   ```json
+   {
+     "type": "port_connection",
+     "port": "имя_порта",
+     "action": "connect"
+   }
+   ```
+
+3. **Ответы сервера**:
+   ```json
+   {
+     "type": "command_response",
+     "message": "результат_выполнения_команды"
+   }
+   ```
+
+4. **Данные телеметрии**:
+   ```json
+   {
+     "type": "telemetry",
+     "data": {
+       "speed": 84,
+       "battery": 26,
+       "coordinates": {
+         "lat": 51.505,
+         "lng": -0.09
+       },
+       "status": "moving"
+     }
+   }
+   ```
+
+5. **Проверка соединения**:
+   ```json
+   {
+     "type": "connection_check",
+     "message": "Проверка соединения"
+   }
+   ```
+
+6. **Ответ на подключение к порту**:
+   ```json
+   {
+     "type": "port_connection_response",
+     "status": "success", // или "error"
+     "message": "Порт подключен успешно"
+   }
+   ```
+
+### Использование WebSocket в компонентах
+
+Для работы с WebSocket в компонентах используется хук `useWebSocketClient`:
+
+```jsx
+import { useWebSocketClient, CONNECTION_STATUS } from './useWebSocketClient';
+
+function YourComponent() {
+  const { 
+    messages,           // массив полученных сообщений
+    sendMessage,        // функция для отправки сообщений
+    connectionStatus,   // статус соединения
+    lastError,          // последняя ошибка
+    reconnect,          // функция для переподключения
+    clearMessages       // функция для очистки списка сообщений
+  } = useWebSocketClient(authToken);
+  
+  // Отправка команды
+  const handleSendCommand = (command) => {
+    sendMessage(command);
+  };
+  
+  // Отправка структурированной команды
+  const handleSendStructuredCommand = () => {
+    sendMessage({
+      type: 'custom_command',
+      action: 'move',
+      direction: 'forward',
+      speed: 10
+    });
+  };
+  
+  // Мониторинг статуса соединения
+  useEffect(() => {
+    if (connectionStatus === CONNECTION_STATUS.ERROR) {
+      console.error('Ошибка соединения:', lastError);
+    }
+  }, [connectionStatus, lastError]);
+  
+  // Обработка полученных сообщений
+  useEffect(() => {
+    if (messages.length > 0) {
+      // Обработка последнего сообщения
+      const lastMessage = messages[messages.length - 1];
+      console.log('Получено сообщение:', lastMessage);
+    }
+  }, [messages]);
+  
+  return (
+    <div>
+      {/* Ваш UI с использованием полученных данных */}
+    </div>
+  );
+}
+```
+
+### Статусы соединения
+
+Модуль WebSocket поддерживает следующие статусы соединения:
+
+- `CONNECTION_STATUS.CONNECTING` - подключение в процессе
+- `CONNECTION_STATUS.CONNECTED` - соединение установлено
+- `CONNECTION_STATUS.DISCONNECTED` - соединение разорвано
+- `CONNECTION_STATUS.ERROR` - ошибка соединения
+
+## Функциональность WebSocket клиента
+
+- **Автоматическое переподключение** - клиент автоматически пытается переподключиться через 5 секунд в случае разрыва соединения
+- **Обработка разных типов сообщений** - клиент может обрабатывать как текстовые сообщения, так и JSON-структуры
+- **Мониторинг состояния** - отслеживание статуса соединения и ошибок
+- **Отправка структурированных данных** - поддержка отправки данных в формате JSON
+- **Индикация статуса** - визуальный индикатор статуса соединения в интерфейсе
+
+## Дополнительная информация
+
+Для дополнительной информации о протоколе обмена данными с автомобилем обратитесь к документации серверной части.

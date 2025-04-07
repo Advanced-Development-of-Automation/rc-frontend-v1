@@ -18,18 +18,18 @@ const container = document.getElementById('root');
 const root = ReactDOM.createRoot(container);
 
 root.render(
-    <React.StrictMode>
-        <ReactKeycloakProvider
-            authClient={keycloak}
-            onEvent={eventLogger}
-            onTokens={tokenLogger}
-            initOptions={{
-                onLoad: 'login-required', // Требовать вход при загрузке
-                checkLoginIframe: false, // Отключить iframe проверки
-                pkceMethod: 'S256',
-            }}
-        >
-            <App />
-        </ReactKeycloakProvider>
-    </React.StrictMode>
+    <ReactKeycloakProvider
+        authClient={keycloak}
+        onEvent={eventLogger}
+        onTokens={tokenLogger}
+        initOptions={{
+            onLoad: 'login-required', // Требовать вход при загрузке
+            checkLoginIframe: false, // Отключить iframe проверки
+            pkceMethod: 'S256',
+            silentCheckSsoRedirectUri: window.location.origin + '/silent-check-sso.html',
+            redirectUri: window.location.origin
+        }}
+    >
+        <App />
+    </ReactKeycloakProvider>
 );

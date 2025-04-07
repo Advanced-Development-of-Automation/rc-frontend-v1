@@ -1,10 +1,20 @@
 // src/keycloak.js
 import Keycloak from 'keycloak-js';
 
-const keycloak = new Keycloak({
-    url: 'https://81.200.149.133:8443/auth', // URL вашего Keycloak сервера
-    realm: 'default', // Ваш Realm
-    clientId: 'rc-frontend-1', // ID клиента
-});
+// Создаем singleton экземпляр Keycloak
+let keycloakInstance = null;
+
+const createKeycloak = () => {
+    if (!keycloakInstance) {
+        keycloakInstance = new Keycloak({
+            url: process.env.REACT_APP_KEYCLOAK_URL || 'https://81.200.149.133:8443',
+            realm: process.env.REACT_APP_KEYCLOAK_REALM || 'default',
+            clientId: process.env.REACT_APP_KEYCLOAK_CLIENT_ID || 'rc-frontend-1',
+        });
+    }
+    return keycloakInstance;
+};
+
+const keycloak = createKeycloak();
 
 export default keycloak;
