@@ -16,28 +16,19 @@ export function useWebSocketClient(token) {
     const ws = useRef(null);
     const reconnectTimeoutRef = useRef(null);
     const car_id = "cmMtY2FyLWNsaWVudCMwMDE="; // car id in base64
-    
+
     // Функция для обработки сообщений от WebSocket
     const handleMessage = useCallback((data) => {
         try {
             // Пробуем распарсить JSON, если сообщение в формате JSON
             const parsedData = JSON.parse(data);
-            console.log('Получено сообщение JSON:', parsedData);
+            console.log('Received JSON message:', parsedData);
             
-            // Можно обрабатывать разные типы сообщений
-            if (parsedData.type === 'command_response') {
-                // Обработка ответа на команду
-                setMessages(prevMessages => [...prevMessages, parsedData.message || data]);
-            } else if (parsedData.type === 'telemetry') {
-                // Обработка телеметрии (может быть добавлено позже)
-                console.log('Получены данные телеметрии:', parsedData.data);
-            } else {
-                // Обработка других типов сообщений
-                setMessages(prevMessages => [...prevMessages, data]);
-            }
+            // Устанавливаем сообщение в состояние
+            setMessages(prevMessages => [...prevMessages, data]);
         } catch (e) {
             // Если не JSON, обрабатываем как текстовое сообщение
-            console.log('Получено текстовое сообщение:', data);
+            console.log('Received text message:', data);
             setMessages(prevMessages => [...prevMessages, data]);
         }
     }, []);
@@ -53,10 +44,9 @@ export function useWebSocketClient(token) {
         try {
             setConnectionStatus(CONNECTION_STATUS.CONNECTING);
             
-            // Используем URL из переменных окружения
-            const wsUrl = process.env.REACT_APP_WS_URL || 'wss://81.200.149.133:9000';
-            
-            console.log('Подключение к WebSocket:', wsUrl);
+            // Формируем URL с параметрами jwt и car_id
+            const wsUrl = `wss://81.200.149.133:9000/?jwt=${token}&car_id=${car_id}`;
+            console.log('Connecting to WebSocket:', wsUrl);
             
             // Закрываем предыдущее соединение, если оно существует
             if (ws.current && ws.current.readyState !== WebSocket.CLOSED) {
@@ -68,61 +58,45 @@ export function useWebSocketClient(token) {
 
             // Обработчик успешного подключения
             ws.current.onopen = () => {
-                console.log('WebSocket подключен');
+                console.log('Connected to WebSocket');
                 setConnectionStatus(CONNECTION_STATUS.CONNECTED);
                 setLastError(null);
-                
-                // Отправляем авторизационные данные
-                if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-                    try {
-                        const authMessage = {
-                            type: 'auth', 
-                            token: token,
-                            car_id: car_id
-                        };
-                        
-                        console.log('Отправка авторизационных данных');
-                        ws.current.send(JSON.stringify(authMessage));
-                    } catch (error) {
-                        console.error('Ошибка отправки сообщения:', error);
-                    }
-                }
             };
 
             // Обработчик входящих сообщений
             ws.current.onmessage = (event) => {
-                console.log('Получены данные:', event.data);
+                console.log('Received:', event.data);
                 handleMessage(event.data);
             };
 
             // Обработчик ошибок
             ws.current.onerror = (error) => {
-                console.error('Ошибка WebSocket:', error);
+                console.error('WebSocket Error:', error);
                 setConnectionStatus(CONNECTION_STATUS.ERROR);
                 setLastError('Ошибка WebSocket соединения');
             };
 
             // Обработчик закрытия соединения
             ws.current.onclose = (event) => {
-                console.log('WebSocket соединение закрыто. Код:', event.code, 'Причина:', event.reason);
+                console.log('WebSocket Disconnected. Code:', event.code, 'Reason:', event.reason || '');
                 setConnectionStatus(CONNECTION_STATUS.DISCONNECTED);
                 
                 // Автоматическое переподключение через 5 секунд, если соединение было закрыто не намеренно
                 if (event.code !== 1000) { // 1000 - нормальное закрытие
-                    console.log('Планирование переподключения...');
+                    console.log('Scheduling reconnection...');
                     
                     if (reconnectTimeoutRef.current) {
                         clearTimeout(reconnectTimeoutRef.current);
                     }
                     
                     reconnectTimeoutRef.current = setTimeout(() => {
-                        console.log('Попытка переподключения...');
+                        console.log('Attempting to reconnect...');
                         connectWebSocket();
                     }, 5000);
                 }
             };
         } catch (error) {
-            console.error('Ошибка настройки WebSocket:', error);
+            console.error('Error setting up WebSocket:', error);
             setConnectionStatus(CONNECTION_STATUS.ERROR);
             setLastError(`Ошибка при настройке WebSocket: ${error.message}`);
         }
@@ -135,7 +109,7 @@ export function useWebSocketClient(token) {
         // Очистка при размонтировании
         return () => {
             if (ws.current) {
-                ws.current.close(1000, 'Компонент размонтирован');
+                ws.current.close(1000, 'Component unmounted');
             }
             if (reconnectTimeoutRef.current) {
                 clearTimeout(reconnectTimeoutRef.current);
@@ -144,24 +118,23 @@ export function useWebSocketClient(token) {
     }, [token, connectWebSocket]);
 
     // Функция для отправки сообщений
-    const sendMessage = useCallback((message, type = 'command') => {
+    const sendMessage = useCallback((message) => {
         if (ws.current && ws.current.readyState === WebSocket.OPEN) {
             try {
-                // Отправляем сообщение в виде JSON с типом
                 const messageToSend = typeof message === 'object' 
                     ? JSON.stringify(message) 
-                    : JSON.stringify({ type, message });
+                    : message;
                     
                 ws.current.send(messageToSend);
-                console.log('Отправлено сообщение:', messageToSend);
+                console.log('Sent message:', messageToSend);
                 return true;
             } catch (error) {
-                console.error('Ошибка отправки сообщения:', error);
+                console.error('Error sending message:', error);
                 setLastError(`Ошибка при отправке сообщения: ${error.message}`);
                 return false;
             }
         } else {
-            console.error('WebSocket не подключен. Невозможно отправить сообщение.');
+            console.error('WebSocket is not open. Unable to send message:', message);
             setLastError('WebSocket не подключен. Невозможно отправить сообщение.');
             return false;
         }

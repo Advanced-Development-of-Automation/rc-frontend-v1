@@ -322,76 +322,118 @@ function ControlPanel({ darkMode, toggleDarkMode }) {
     useEffect(() => {
         if (messages.length > 0) {
             const lastMessage = messages[messages.length - 1];
+            console.log('Получено новое сообщение:', lastMessage);
+            
+            // Специальная обработка для сообщений с UUID и других специальных форматов
+            if (typeof lastMessage === 'string') {
+                // Проверим на формат ID + случайные символы (например, 57766995IyWGVTdRftWEdZw)
+                if (/^\d{8}[a-zA-Z0-9]{12,}$/.test(lastMessage)) {
+                    console.log('Распознан ID сообщения:', lastMessage);
+                    return; // Просто игнорируем такие сообщения, это ID
+                }
+                
+                // Проверим на формат "Recieved: {...}|timestamp"
+                if (lastMessage.startsWith('Recieved:')) {
+                    try {
+                        // Извлекаем JSON часть из сообщения
+                        const parts = lastMessage.split('|');
+                        const jsonPart = parts[0].replace('Recieved: ', '').trim();
+                        const parsedMessage = JSON.parse(jsonPart);
+                        
+                        console.log('Извлечено сообщение из ответа:', parsedMessage);
+                        
+                        // Обработка успешно распарсенного сообщения
+                        handleParsedMessage(parsedMessage);
+                        return;
+                    } catch (e) {
+                        console.log('Не удалось извлечь JSON из сообщения с префиксом:', e);
+                    }
+                }
+            }
             
             try {
-                // Пробуем распарсить сообщение как JSON
+                // Стандартный парсинг JSON
                 const parsedMessage = typeof lastMessage === 'string' ? 
                     JSON.parse(lastMessage) : lastMessage;
                 
-                console.log('Обработка входящего сообщения:', parsedMessage);
+                console.log('Сообщение успешно распарсено:', parsedMessage);
                 
-                // Обрабатываем разные типы сообщений
-                if (parsedMessage.type === 'port_connection_response') {
-                    // Ответ на запрос подключения к порту
-                    if (parsedMessage.status === 'success') {
-                        setPortStatus('ready');
-                        setCameraEnabled(true);
-                    } else {
-                        setPortStatus('error');
-                        setCameraEnabled(false);
-                    }
-                    setResponse(parsedMessage.message || 'Статус порта изменен');
-                    setSnackbarOpen(true);
-                } else if (parsedMessage.type === 'telemetry') {
-                    // Обработка телеметрии
-                    const { data } = parsedMessage;
-                    if (data) {
-                        setTelemetry({
-                            speed: data.speed || 0,
-                            battery: data.battery || 0,
-                            coordinates: data.coordinates || telemetry.coordinates,
-                            status: data.status || 'unknown',
-                            lastUpdate: data.timestamp || Date.now()
-                        });
-                        
-                        // Обновляем центр карты, если автомобиль движется
-                        if (data.coordinates && data.status === 'moving') {
-                            setMapCenter([data.coordinates.lat, data.coordinates.lng]);
-                            
-                            // Перемещаем карту к новым координатам
-                            if (mapRef.current) {
-                                mapRef.current.setView(
-                                    [data.coordinates.lat, data.coordinates.lng],
-                                    mapZoom,
-                                    { animate: true }
-                                );
-                            }
-                        }
-                    }
-                } else if (parsedMessage.type === 'command_response') {
-                    // Ответы на команды
-                    setResponse(`Ответ: ${parsedMessage.message || JSON.stringify(parsedMessage)}`);
-                    setSnackbarOpen(true);
-                    setIsLoading(false);
-                } else if (parsedMessage.type === 'auth_response') {
-                    // Ответ на авторизацию
-                    setResponse(`Авторизация: ${parsedMessage.status === 'success' ? 'успешна' : 'ошибка'}`);
-                    setSnackbarOpen(true);
-                } else {
-                    // Для прочих сообщений просто показываем текст
-                    setResponse(`Ответ: ${typeof lastMessage === 'string' ? lastMessage : JSON.stringify(lastMessage)}`);
-                    setSnackbarOpen(true);
-                    setIsLoading(false);
-                }
+                // Обработка стандартного JSON-сообщения
+                handleParsedMessage(parsedMessage);
             } catch (e) {
                 // Если не удалось распарсить как JSON, просто показываем текст
                 console.log('Не удалось распарсить сообщение как JSON:', e);
-                setResponse(`Ответ: ${lastMessage}`);
+                
+                // Некоторые ответы могут быть в нестандартном формате, 
+                // просто отображаем их как текст
+                setResponse(`Получено: ${lastMessage}`);
                 setSnackbarOpen(true);
                 setIsLoading(false);
             }
         }
     }, [messages]);
+    
+    // Вспомогательная функция для обработки распарсенных сообщений
+    const handleParsedMessage = (parsedMessage) => {
+        // Обрабатываем разные типы сообщений
+        if (parsedMessage.type === 'port_connection_response') {
+            // Ответ на запрос подключения к порту
+            if (parsedMessage.status === 'success') {
+                setPortStatus('ready');
+                setCameraEnabled(true);
+            } else {
+                setPortStatus('error');
+                setCameraEnabled(false);
+            }
+            setResponse(parsedMessage.message || 'Статус порта изменен');
+            setSnackbarOpen(true);
+        } else if (parsedMessage.type === 'telemetry') {
+            // Обработка телеметрии
+            const { data } = parsedMessage;
+            if (data) {
+                setTelemetry({
+                    speed: data.speed || 0,
+                    battery: data.battery || 0,
+                    coordinates: data.coordinates || telemetry.coordinates,
+                    status: data.status || 'unknown',
+                    lastUpdate: data.timestamp || Date.now()
+                });
+                
+                // Обновляем центр карты, если автомобиль движется
+                if (data.coordinates && data.status === 'moving') {
+                    setMapCenter([data.coordinates.lat, data.coordinates.lng]);
+                    
+                    // Перемещаем карту к новым координатам
+                    if (mapRef.current) {
+                        mapRef.current.setView(
+                            [data.coordinates.lat, data.coordinates.lng],
+                            mapZoom,
+                            { animate: true }
+                        );
+                    }
+                }
+            }
+        } else if (parsedMessage.type === 'command_response') {
+            // Ответы на команды
+            setResponse(`Ответ: ${parsedMessage.message || JSON.stringify(parsedMessage)}`);
+            setSnackbarOpen(true);
+            setIsLoading(false);
+        } else if (parsedMessage.type === 'auth_response') {
+            // Ответ на авторизацию
+            setResponse(`Авторизация: ${parsedMessage.status === 'success' ? 'успешна' : 'ошибка'}`);
+            setSnackbarOpen(true);
+        } else if (parsedMessage.type === 'test_message') {
+            // Ответ на тестовое сообщение
+            setResponse(`Тестовое сообщение получено: ${parsedMessage.message}`);
+            setSnackbarOpen(true);
+            setIsLoading(false);
+        } else {
+            // Для прочих сообщений просто показываем текст
+            setResponse(`Ответ: ${JSON.stringify(parsedMessage)}`);
+            setSnackbarOpen(true);
+            setIsLoading(false);
+        }
+    };
 
     // Отображаем статус WebSocket соединения
     useEffect(() => {
